@@ -1,0 +1,41 @@
+{
+	"schemaVersion": 1,
+	"id": "witch-hat-atelier-mod",
+	"version": "${version}",
+	"name": "witch-hat-atelier-mod",
+	"description": "This is an example description! Tell everyone what your mod is about!",
+	"authors": [
+		"Me!"
+	],
+	"contact": {
+		"homepage": "https://fabricmc.net/",
+		"sources": "https://github.com/FabricMC/fabric-example-mod"
+	},
+	"license": "CC0-1.0",
+	"icon": "assets/witch-hat-atelier-mod/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"net.oshino.witchhatateliermod.WitchHatAtelierMod"
+		],
+		"client": [
+			"net.oshino.witchhatateliermod.client.WitchHatAtelierModClient"
+		],
+		"fabric-datagen": [
+			"net.oshino.witchhatateliermod.client.WitchHatAtelierModDataGenerator"
+		]
+	},
+	"mixins": [
+		"witch-hat-atelier-mod.mixins.json",
+		{
+			"config": "witch-hat-atelier-mod.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.19.3",
+		"minecraft": "~1.21.1",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}
