@@ -15,8 +15,9 @@ public final class InkSacCoordinateFeature {
 				return ActionResult.PASS;
 			}
 
-			BakedModelPixelFeature.findPixel(MinecraftClient.getInstance(), hitResult)
-					.ifPresent(BlackPixelRenderer::addPixel);
+			BakedModelPixelFeature.findPixels(
+					MinecraftClient.getInstance(), hitResult, InkBrushSizeFeature.getSize()
+			).forEach(BlackPixelRenderer::addPixel);
 
 			return ActionResult.PASS;
 		});

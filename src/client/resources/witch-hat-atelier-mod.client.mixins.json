@@ -3,7 +3,7 @@
 	"package": "net.oshino.witchhatateliermod.client.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
-		"ExampleClientMixin"
+		"MouseMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

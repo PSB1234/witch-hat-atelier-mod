@@ -29,8 +29,17 @@ public final class BakedModelPixelFeature {
 	private static final double RAY_EPSILON = 1.0E-7;
 
 	public static Optional<ModelPixelHit> findPixel(MinecraftClient client, BlockHitResult blockHit) {
+		List<ModelPixelHit> pixels = findPixels(client, blockHit, 1);
+		return pixels.isEmpty() ? Optional.empty() : Optional.of(pixels.getFirst());
+	}
+
+	public static List<ModelPixelHit> findPixels(MinecraftClient client, BlockHitResult blockHit, int brushSize) {
+		if (brushSize <= 0) {
+			throw new IllegalArgumentException("brushSize must be greater than zero");
+		}
+
 		if (client.world == null) {
-			return Optional.empty();
+			return List.of();
 		}
 
 		BlockPos blockPos = blockHit.getBlockPos();
@@ -68,7 +77,82 @@ public final class BakedModelPixelFeature {
 			}
 		}
 
-		return nearest == null ? Optional.empty() : Optional.of(createPixelHit(blockPos, nearest));
+		if (nearest == null) {
+			return List.of();
+		}
+
+		Sprite sprite = nearest.quad.getSprite();
+		int textureWidth = sprite.getContents().getWidth();
+		int textureHeight = sprite.getContents().getHeight();
+		int centerX = MathHelper.clamp(
+				MathHelper.floor(sprite.getFrameFromU((float) nearest.u) * textureWidth), 0, textureWidth - 1
+		);
+		int centerY = MathHelper.clamp(
+				MathHelper.floor(sprite.getFrameFromV((float) nearest.v) * textureHeight), 0, textureHeight - 1
+		);
+		int startX = centerX - (brushSize - 1) / 2;
+		int startY = centerY - (brushSize - 1) / 2;
+		List<ModelPixelHit> pixels = new ArrayList<>();
+		for (int pixelY = startY; pixelY < startY + brushSize; pixelY++) {
+			for (int pixelX = startX; pixelX < startX + brushSize; pixelX++) {
+				if (pixelX >= 0 && pixelX < textureWidth && pixelY >= 0 && pixelY < textureHeight) {
+					ModelPixelHit pixel = createPixelHit(blockPos, nearest, pixelX, pixelY);
+					if (!pixel.polygons().isEmpty()) {
+						pixels.add(pixel);
+					}
+				} else {
+					findOverflowPixel(
+							client, blockPos, nearest, pixelX, pixelY, textureWidth, textureHeight
+					).ifPresent(pixels::add);
+				}
+			}
+		}
+		return List.copyOf(pixels);
+	}
+
+	private static Optional<ModelPixelHit> findOverflowPixel(
+			MinecraftClient client,
+			BlockPos originalPos,
+			QuadIntersection intersection,
+			int pixelX,
+			int pixelY,
+			int textureWidth,
+			int textureHeight
+	) {
+		Sprite sprite = intersection.quad.getSprite();
+		double sampleU = sprite.getFrameU((float) (pixelX + 0.5) / textureWidth);
+		double sampleV = sprite.getFrameV((float) (pixelY + 0.5) / textureHeight);
+		Vec3d samplePosition = positionForUv(intersection.vertices, sampleU, sampleV);
+		if (samplePosition == null) {
+			return Optional.empty();
+		}
+
+		Direction face = intersection.quad.getFace();
+		Vec3d inwardOffset = Vec3d.of(face.getOpposite().getVector()).multiply(0.01);
+		BlockPos overflowPos = BlockPos.ofFloored(samplePosition.add(inwardOffset));
+		if (overflowPos.equals(originalPos)) {
+			return Optional.empty();
+		}
+
+		BlockHitResult overflowHit = new BlockHitResult(samplePosition, face, overflowPos, false);
+		return findPixel(client, overflowHit);
+	}
+
+	private static Vec3d positionForUv(QuadVertex[] vertices, double u, double v) {
+		Vec3d position = positionForUv(vertices[0], vertices[1], vertices[2], u, v);
+		return position != null ? position : positionForUv(vertices[0], vertices[2], vertices[3], u, v);
+	}
+
+	private static Vec3d positionForUv(QuadVertex a, QuadVertex b, QuadVertex c, double u, double v) {
+		double denominator = (b.v - c.v) * (a.u - c.u) + (c.u - b.u) * (a.v - c.v);
+		if (Math.abs(denominator) < RAY_EPSILON) {
+			return null;
+		}
+
+		double weightA = ((b.v - c.v) * (u - c.u) + (c.u - b.u) * (v - c.v)) / denominator;
+		double weightB = ((c.v - a.v) * (u - c.u) + (a.u - c.u) * (v - c.v)) / denominator;
+		double weightC = 1.0 - weightA - weightB;
+		return a.position.multiply(weightA).add(b.position.multiply(weightB)).add(c.position.multiply(weightC));
 	}
 
 	private static List<BakedQuad> getRenderedQuads(
@@ -92,14 +176,10 @@ public final class BakedModelPixelFeature {
 		return quads;
 	}
 
-	private static ModelPixelHit createPixelHit(BlockPos blockPos, QuadIntersection intersection) {
+	private static ModelPixelHit createPixelHit(BlockPos blockPos, QuadIntersection intersection, int pixelX, int pixelY) {
 		Sprite sprite = intersection.quad.getSprite();
 		int textureWidth = sprite.getContents().getWidth();
 		int textureHeight = sprite.getContents().getHeight();
-		double spriteU = sprite.getFrameFromU((float) intersection.u);
-		double spriteV = sprite.getFrameFromV((float) intersection.v);
-		int pixelX = MathHelper.clamp(MathHelper.floor(spriteU * textureWidth), 0, textureWidth - 1);
-		int pixelY = MathHelper.clamp(MathHelper.floor(spriteV * textureHeight), 0, textureHeight - 1);
 
 		double minU = sprite.getFrameU((float) pixelX / textureWidth);
 		double maxU = sprite.getFrameU((float) (pixelX + 1) / textureWidth);
