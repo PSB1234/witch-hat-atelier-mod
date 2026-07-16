@@ -1,10 +1,13 @@
 package net.oshino.witchhatateliermod.client;
 
 import net.fabricmc.api.ClientModInitializer;
+import net.oshino.witchhatateliermod.client.feature.BlackPixelRenderer;
+import net.oshino.witchhatateliermod.client.feature.InkSacCoordinateFeature;
 
 public class WitchHatAtelierModClient implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
-		// This entrypoint is suitable for setting up client-specific logic, such as rendering.
+		InkSacCoordinateFeature.register();
+		BlackPixelRenderer.register();
 	}
 }
