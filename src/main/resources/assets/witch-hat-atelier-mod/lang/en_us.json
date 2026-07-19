@@ -1,6 +1,8 @@
 {
   "item.witch-hat-atelier-mod.spellbook": "Witch's Spellbook",
   "screen.witch-hat-atelier-mod.spellbook": "The Witch's Field Notes",
+  "screen.witch-hat-atelier-mod.paper": "Paper",
+  "screen.witch-hat-atelier-mod.paper.placeholder": "The paper workspace is coming soon.",
   "guide.witch-hat-atelier-mod.mod_name": "Witch Hat Atelier",
   "guide.witch-hat-atelier-mod.contents": "FIELD INDEX",
   "guide.witch-hat-atelier-mod.field_note": "FIELD NOTE",

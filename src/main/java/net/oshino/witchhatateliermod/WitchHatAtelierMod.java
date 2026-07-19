@@ -1,9 +1,13 @@
 package net.oshino.witchhatateliermod;
 
 import net.fabricmc.api.ModInitializer;
+import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 
+import net.minecraft.block.Blocks;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
+import net.minecraft.util.ActionResult;
 import net.minecraft.util.Identifier;
 import net.oshino.witchhatateliermod.item.ModItems;
 
@@ -18,6 +22,15 @@ public class WitchHatAtelierMod implements ModInitializer {
 	@Override
 	public void onInitialize() {
 		ModItems.register();
+		UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
+			if (!world.isClient
+					&& !player.isSpectator()
+					&& player.getStackInHand(hand).isOf(Items.PAPER)
+					&& world.getBlockState(hitResult.getBlockPos()).isOf(Blocks.LECTERN)) {
+				return ActionResult.SUCCESS;
+			}
+			return ActionResult.PASS;
+		});
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
 			var player = handler.getPlayer();
 			if (player.getCommandTags().contains(RECEIVED_SPELLBOOK_TAG)) {
