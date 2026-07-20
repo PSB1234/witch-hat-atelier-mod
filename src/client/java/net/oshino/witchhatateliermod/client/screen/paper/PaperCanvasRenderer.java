@@ -1,8 +1,11 @@
 package net.oshino.witchhatateliermod.client.screen.paper;
 
 import net.minecraft.client.gui.DrawContext;
+import net.oshino.witchhatateliermod.client.drawing.stamp.AwtStampShapeFactory;
+import net.oshino.witchhatateliermod.client.drawing.stamp.DrawContextStampRenderer;
 import net.oshino.witchhatateliermod.client.screen.paper.PaperCanvas.CanvasPoint;
 import net.oshino.witchhatateliermod.client.screen.paper.PaperCanvas.PaperStroke;
+import net.oshino.witchhatateliermod.drawing.stamp.DrawingStamp;
 
 import javax.imageio.ImageIO;
 import java.awt.BasicStroke;
@@ -41,6 +44,14 @@ public final class PaperCanvasRenderer {
         activeHardness = stroke.brush().hardness();
         CanvasPoint start = absolute(stroke.start(), originX, originY);
         CanvasPoint end = absolute(stroke.end(), originX, originY);
+        DrawingStamp stamp = stroke.tool().stamp().orElse(null);
+        if (stamp != null) {
+            StampBounds bounds = stampBounds(start, end);
+            DrawContextStampRenderer.render(context, stamp,
+                    bounds.x(), bounds.y(), bounds.width(), bounds.height(),
+                    INK, SHAPE_SIZE, activeHardness);
+            return;
+        }
 
         switch (stroke.tool()) {
             case PENCIL -> drawFreehand(context, stroke.points(), originX, originY, INK, PENCIL_SIZE);
@@ -49,9 +60,7 @@ public final class PaperCanvasRenderer {
             case CIRCLE -> drawEllipse(context, start, end);
             case RECTANGLE -> drawRectangle(context, start, end);
             case TRIANGLE -> drawTriangle(context, start, end);
-            case WIND_SIGN -> drawWindSign(context, stampBounds(start, end));
-            case LIGHT_SIGIL -> drawLightSigil(context, stampBounds(start, end));
-            case WATER_SIGN -> drawWaterSign(context, stampBounds(start, end));
+            default -> throw new IllegalStateException("Paper tool has no drawing implementation: " + stroke.tool());
         }
     }
 
@@ -107,51 +116,6 @@ public final class PaperCanvasRenderer {
             CanvasPoint current = ellipsePoint(centerX, centerY, radiusX, radiusY, angle);
             drawLine(context, previous, current, INK, SHAPE_SIZE);
             previous = current;
-        }
-    }
-
-    private void drawWindSign(DrawContext context, StampBounds bounds) {
-        int left = bounds.x();
-        int right = bounds.x() + bounds.width();
-        int quarter = bounds.height() / 4;
-        drawLine(context, new CanvasPoint(left, bounds.y() + quarter),
-                new CanvasPoint(right - bounds.width() / 5, bounds.y() + quarter), INK, SHAPE_SIZE);
-        drawLine(context, new CanvasPoint(left + bounds.width() / 5, bounds.y() + quarter * 2),
-                new CanvasPoint(right, bounds.y() + quarter * 2), INK, SHAPE_SIZE);
-        drawLine(context, new CanvasPoint(left, bounds.y() + quarter * 3),
-                new CanvasPoint(right - bounds.width() / 4, bounds.y() + quarter * 3), INK, SHAPE_SIZE);
-    }
-
-    private void drawLightSigil(DrawContext context, StampBounds bounds) {
-        int centerX = bounds.x() + bounds.width() / 2;
-        int centerY = bounds.y() + bounds.height() / 2;
-        int radiusX = bounds.width() / 2;
-        int radiusY = bounds.height() / 2;
-        drawLine(context, new CanvasPoint(centerX, centerY - radiusY),
-                new CanvasPoint(centerX, centerY + radiusY), INK, SHAPE_SIZE);
-        drawLine(context, new CanvasPoint(centerX - radiusX, centerY),
-                new CanvasPoint(centerX + radiusX, centerY), INK, SHAPE_SIZE);
-        drawLine(context, new CanvasPoint(centerX - radiusX * 2 / 3, centerY - radiusY * 2 / 3),
-                new CanvasPoint(centerX + radiusX * 2 / 3, centerY + radiusY * 2 / 3), INK, SHAPE_SIZE);
-        drawLine(context, new CanvasPoint(centerX + radiusX * 2 / 3, centerY - radiusY * 2 / 3),
-                new CanvasPoint(centerX - radiusX * 2 / 3, centerY + radiusY * 2 / 3), INK, SHAPE_SIZE);
-    }
-
-    private void drawWaterSign(DrawContext context, StampBounds bounds) {
-        int left = bounds.x();
-        int right = bounds.x() + bounds.width();
-        int wave = Math.max(2, bounds.height() / 5);
-        for (int row = 1; row <= 3; row++) {
-            int centerY = bounds.y() + bounds.height() * row / 4;
-            CanvasPoint previous = new CanvasPoint(left, centerY);
-            int segments = Math.max(6, bounds.width() / 3);
-            for (int index = 1; index <= segments; index++) {
-                int currentX = left + (right - left) * index / segments;
-                int currentY = centerY + (int) Math.round(Math.sin(Math.PI * 2.0 * index / segments) * wave);
-                CanvasPoint current = new CanvasPoint(currentX, currentY);
-                drawLine(context, previous, current, INK, SHAPE_SIZE);
-                previous = current;
-            }
         }
     }
 
@@ -228,16 +192,23 @@ public final class PaperCanvasRenderer {
     private void drawExportStroke(Graphics2D graphics, PaperStroke stroke) {
         CanvasPoint start = stroke.start();
         CanvasPoint end = stroke.end();
-        Shape shape = switch (stroke.tool()) {
-            case PENCIL, ERASER -> freehandPath(stroke.points());
-            case LINE -> new Line2D.Double(start.x(), start.y(), end.x(), end.y());
-            case CIRCLE -> ellipseShape(start, end);
-            case RECTANGLE -> rectangleShape(start, end);
-            case TRIANGLE -> triangleShape(start, end);
-            case WIND_SIGN -> windShape(stampBounds(start, end));
-            case LIGHT_SIGIL -> lightShape(stampBounds(start, end));
-            case WATER_SIGN -> waterShape(stampBounds(start, end));
-        };
+        DrawingStamp stamp = stroke.tool().stamp().orElse(null);
+        Shape shape;
+        if (stamp != null) {
+            StampBounds bounds = stampBounds(start, end);
+            shape = AwtStampShapeFactory.create(stamp,
+                    bounds.x(), bounds.y(), bounds.width(), bounds.height());
+        } else {
+            shape = switch (stroke.tool()) {
+                case PENCIL, ERASER -> freehandPath(stroke.points());
+                case LINE -> new Line2D.Double(start.x(), start.y(), end.x(), end.y());
+                case CIRCLE -> ellipseShape(start, end);
+                case RECTANGLE -> rectangleShape(start, end);
+                case TRIANGLE -> triangleShape(start, end);
+                default -> throw new IllegalStateException(
+                        "Paper tool has no export implementation: " + stroke.tool());
+            };
+        }
         int size = stroke.tool() == PaperTool.ERASER ? ERASER_SIZE
                 : stroke.tool() == PaperTool.PENCIL ? PENCIL_SIZE : SHAPE_SIZE;
         Color color = stroke.tool() == PaperTool.ERASER ? Color.WHITE : new Color(INK, true);
@@ -297,55 +268,6 @@ public final class PaperCanvasRenderer {
         path.lineTo(right, bottom);
         path.closePath();
         return path;
-    }
-
-    private Shape windShape(StampBounds bounds) {
-        Path2D path = new Path2D.Double();
-        int right = bounds.x() + bounds.width();
-        int quarter = bounds.height() / 4;
-        path.moveTo(bounds.x(), bounds.y() + quarter);
-        path.lineTo(right - bounds.width() / 5.0, bounds.y() + quarter);
-        path.moveTo(bounds.x() + bounds.width() / 5.0, bounds.y() + quarter * 2.0);
-        path.lineTo(right, bounds.y() + quarter * 2.0);
-        path.moveTo(bounds.x(), bounds.y() + quarter * 3.0);
-        path.lineTo(right - bounds.width() / 4.0, bounds.y() + quarter * 3.0);
-        return path;
-    }
-
-    private Shape lightShape(StampBounds bounds) {
-        int centerX = bounds.x() + bounds.width() / 2;
-        int centerY = bounds.y() + bounds.height() / 2;
-        int radiusX = bounds.width() / 2;
-        int radiusY = bounds.height() / 2;
-        Path2D path = new Path2D.Double();
-        addLine(path, centerX, centerY - radiusY, centerX, centerY + radiusY);
-        addLine(path, centerX - radiusX, centerY, centerX + radiusX, centerY);
-        addLine(path, centerX - radiusX * 2 / 3.0, centerY - radiusY * 2 / 3.0,
-                centerX + radiusX * 2 / 3.0, centerY + radiusY * 2 / 3.0);
-        addLine(path, centerX + radiusX * 2 / 3.0, centerY - radiusY * 2 / 3.0,
-                centerX - radiusX * 2 / 3.0, centerY + radiusY * 2 / 3.0);
-        return path;
-    }
-
-    private Shape waterShape(StampBounds bounds) {
-        Path2D path = new Path2D.Double();
-        int wave = Math.max(2, bounds.height() / 5);
-        int segments = Math.max(6, bounds.width() / 3);
-        for (int row = 1; row <= 3; row++) {
-            int centerY = bounds.y() + bounds.height() * row / 4;
-            path.moveTo(bounds.x(), centerY);
-            for (int index = 1; index <= segments; index++) {
-                int x = bounds.x() + bounds.width() * index / segments;
-                int y = centerY + (int) Math.round(Math.sin(Math.PI * 2.0 * index / segments) * wave);
-                path.lineTo(x, y);
-            }
-        }
-        return path;
-    }
-
-    private void addLine(Path2D path, double x1, double y1, double x2, double y2) {
-        path.moveTo(x1, y1);
-        path.lineTo(x2, y2);
     }
 
     private CanvasPoint ellipsePoint(double centerX, double centerY, double radiusX, double radiusY,
