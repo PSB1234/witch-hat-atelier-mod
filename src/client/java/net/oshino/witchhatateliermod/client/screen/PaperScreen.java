@@ -3,7 +3,9 @@ package net.oshino.witchhatateliermod.client.screen;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.text.Text;
-import net.oshino.witchhatateliermod.client.screen.paper.BrushSettings;
+import net.minecraft.util.Identifier;
+import net.minecraft.util.math.RotationAxis;
+import net.oshino.witchhatateliermod.WitchHatAtelierMod;
 import net.oshino.witchhatateliermod.client.screen.paper.PaperCanvas;
 import net.oshino.witchhatateliermod.client.screen.paper.PaperCanvasRenderer;
 import net.oshino.witchhatateliermod.client.screen.paper.PaperTool;
@@ -23,6 +25,22 @@ public final class PaperScreen extends Screen {
     private static final int ACTION_BUTTON_HEIGHT = 18;
     private static final int ACTION_BUTTON_GAP = 3;
     private static final int ACTION_BUTTON_COUNT = 6;
+    private static final int GUI_ICON_SIZE = 16;
+
+    private static final Identifier PENCIL_TEXTURE = guiTexture("pencil");
+    private static final Identifier ERASER_TEXTURE = guiTexture("eraser");
+    private static final Identifier LINE_TEXTURE = guiTexture("line_draw");
+    private static final Identifier CIRCLE_TEXTURE = guiTexture("circle");
+    private static final Identifier RECTANGLE_TEXTURE = guiTexture("square");
+    private static final Identifier TRIANGLE_TEXTURE = guiTexture("triangle");
+    private static final Identifier CLEAR_TEXTURE = guiTexture("garbage_bin");
+    private static final Identifier UNDO_TEXTURE = guiTexture("arrows_reload_refresh_rotate_counterclockwise");
+    private static final Identifier REDO_TEXTURE = guiTexture("arrows_reload_refresh_rotate_clockwise");
+    private static final Identifier SAVE_TEXTURE = guiTexture("software_save_button_floppy_disk");
+    private static final Identifier LOAD_TEXTURE = guiTexture("software_file_document_page_plus_add_new");
+    private static final Identifier EXPORT_TEXTURE = guiTexture("software_file_document_page_arrow_send_export");
+    private static final Identifier SIGILS_TEXTURE = guiTexture("rpg_spell_magic_circle_ritual_pentagram");
+    private static final Identifier CHEVRON_TEXTURE = guiTexture("arrows_pointer_down_south");
 
     private static final int PANEL = 0xF21B171C;
     private static final int PANEL_BORDER = 0xFF6D5A54;
@@ -94,15 +112,6 @@ public final class PaperScreen extends Screen {
                 return true;
             }
         }
-        if (hardnessButton(layout.actions()).contains(mouseX, mouseY)) {
-            workspace.cycleHardness();
-            return true;
-        }
-        if (stabilizationButton(layout.actions()).contains(mouseX, mouseY)) {
-            workspace.cycleStabilization();
-            return true;
-        }
-
         Bounds toolbar = layout.toolbar();
         if (primaryButton(toolbar, 0).contains(mouseX, mouseY)) {
             selectedTool = PaperTool.PENCIL;
@@ -198,6 +207,18 @@ public final class PaperScreen extends Screen {
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
+    public void cycleBrushHardness() {
+        workspace.cycleHardness();
+        showStatus(Text.translatable("screen.witch-hat-atelier-mod.paper.brush.hardness",
+                workspace.brush().hardnessPercent()));
+    }
+
+    public void cycleBrushSmoothing() {
+        workspace.cycleStabilization();
+        showStatus(Text.translatable("screen.witch-hat-atelier-mod.paper.brush.smoothing",
+                workspace.brush().stabilization()));
+    }
+
     private void drawPaper(DrawContext context, Bounds paper) {
         context.fill(paper.x() + 4, paper.y() + 5,
                 paper.right() + 4, paper.bottom() + 5, PAPER_SHADOW);
@@ -239,28 +260,36 @@ public final class PaperScreen extends Screen {
         context.fill(actions.x(), actions.y(), actions.right(), actions.bottom(), PANEL_BORDER);
         context.fill(actions.x() + 1, actions.y() + 1, actions.right() - 1, actions.bottom() - 1, PANEL);
 
-        String[] labels = {"Undo", "Redo", "Save", "Load", "PNG", "Clear"};
-        for (int index = 0; index < labels.length; index++) {
+        for (int index = 0; index < ACTION_BUTTON_COUNT; index++) {
             Bounds button = actionButton(actions, index);
             boolean enabled = index != 0 || canvas.canUndo();
             enabled = enabled && (index != 1 || canvas.canRedo());
-            drawTextButton(context, button, labels[index], enabled, mouseX, mouseY);
+            drawActionButton(context, button, actionTexture(index), enabled, mouseX, mouseY);
         }
-
-        BrushSettings brush = workspace.brush();
-        drawTextButton(context, hardnessButton(actions), "H " + brush.hardnessPercent() + "%",
-                true, mouseX, mouseY);
-        drawTextButton(context, stabilizationButton(actions), "Smooth " + brush.stabilization(),
-                true, mouseX, mouseY);
     }
 
-    private void drawTextButton(DrawContext context, Bounds bounds, String label, boolean enabled,
-                                int mouseX, int mouseY) {
+    private void drawActionButton(DrawContext context, Bounds bounds, Identifier texture,
+                                  boolean enabled, int mouseX, int mouseY) {
         int color = !enabled ? 0xFF252126 : bounds.contains(mouseX, mouseY) ? BUTTON_HOVER : BUTTON;
         context.fill(bounds.x(), bounds.y(), bounds.right(), bounds.bottom(), color);
-        int textColor = enabled ? TEXT : 0xFF766C6D;
-        context.drawCenteredTextWithShadow(textRenderer, label,
-                bounds.x() + bounds.width() / 2, bounds.y() + 5, textColor);
+        int iconX = bounds.x() + (bounds.width() - GUI_ICON_SIZE) / 2;
+        int iconY = bounds.y() + (bounds.height() - GUI_ICON_SIZE) / 2;
+        drawTextureIcon(context, texture, iconX, iconY);
+        if (!enabled) {
+            context.fill(iconX, iconY, iconX + GUI_ICON_SIZE, iconY + GUI_ICON_SIZE, 0x88000000);
+        }
+    }
+
+    private static Identifier actionTexture(int index) {
+        return switch (index) {
+            case 0 -> UNDO_TEXTURE;
+            case 1 -> REDO_TEXTURE;
+            case 2 -> SAVE_TEXTURE;
+            case 3 -> LOAD_TEXTURE;
+            case 4 -> EXPORT_TEXTURE;
+            case 5 -> CLEAR_TEXTURE;
+            default -> throw new IllegalArgumentException("Unknown paper action " + index);
+        };
     }
 
     private void runAction(int index) {
@@ -276,7 +305,11 @@ public final class PaperScreen extends Screen {
     }
 
     private void showStatus(String message) {
-        statusMessage = Text.literal(message);
+        showStatus(Text.literal(message));
+    }
+
+    private void showStatus(Text message) {
+        statusMessage = message;
         statusMessageUntil = System.currentTimeMillis() + 3_000L;
     }
 
@@ -288,9 +321,35 @@ public final class PaperScreen extends Screen {
         context.drawHorizontalLine(bounds.x(), bounds.right() - 1, bounds.y(), PANEL_BORDER);
         context.drawVerticalLine(bounds.x(), bounds.y(), bounds.bottom() - 1, PANEL_BORDER);
 
-        int iconX = bounds.x() + (bounds.width() - 24) / 2;
-        int iconY = bounds.y() + (bounds.height() - 24) / 2;
-        drawPixelIcon(context, iconX, iconY, tool, TEXT);
+        Identifier texture = toolTexture(tool);
+        if (texture != null) {
+            int iconX = bounds.x() + (bounds.width() - GUI_ICON_SIZE) / 2;
+            int iconY = bounds.y() + (bounds.height() - GUI_ICON_SIZE) / 2;
+            drawTextureIcon(context, texture, iconX, iconY);
+        } else {
+            int iconX = bounds.x() + (bounds.width() - 24) / 2;
+            int iconY = bounds.y() + (bounds.height() - 24) / 2;
+            drawPixelIcon(context, iconX, iconY, tool, TEXT);
+        }
+    }
+
+    private static Identifier guiTexture(String name) {
+        return WitchHatAtelierMod.id("textures/gui/" + name + ".png");
+    }
+
+    private static Identifier toolTexture(PaperTool tool) {
+        if (tool == null) {
+            return CLEAR_TEXTURE;
+        }
+        return switch (tool) {
+            case PENCIL -> PENCIL_TEXTURE;
+            case ERASER -> ERASER_TEXTURE;
+            case LINE -> LINE_TEXTURE;
+            case CIRCLE -> CIRCLE_TEXTURE;
+            case RECTANGLE -> RECTANGLE_TEXTURE;
+            case TRIANGLE -> TRIANGLE_TEXTURE;
+            case WIND_SIGN, LIGHT_SIGIL, WATER_SIGN -> null;
+        };
     }
 
     private void drawSigilsHeader(DrawContext context, Bounds bounds, int mouseX, int mouseY) {
@@ -299,8 +358,23 @@ public final class PaperScreen extends Screen {
         context.drawHorizontalLine(bounds.x(), bounds.right() - 1, bounds.y(), PANEL_BORDER);
         context.drawVerticalLine(bounds.x(), bounds.y(), bounds.bottom() - 1, PANEL_BORDER);
 
-        drawSigilsCategoryIcon(context, bounds.x() + 8, bounds.y() + 6, TEXT);
-        drawChevron(context, bounds.right() - 13, bounds.y() + 8, sigilsExpanded, TEXT);
+        drawTextureIcon(context, SIGILS_TEXTURE, bounds.x() + 5, bounds.y() + 2);
+        drawRotatedChevron(context, bounds.right() - 19, bounds.y() + 2);
+    }
+
+    private static void drawTextureIcon(DrawContext context, Identifier texture, int x, int y) {
+        context.drawTexture(texture, x, y, 0.0F, 0.0F,
+                GUI_ICON_SIZE, GUI_ICON_SIZE, GUI_ICON_SIZE, GUI_ICON_SIZE);
+    }
+
+    private void drawRotatedChevron(DrawContext context, int x, int y) {
+        context.getMatrices().push();
+        context.getMatrices().translate(x + GUI_ICON_SIZE / 2.0F, y + GUI_ICON_SIZE / 2.0F, 0.0F);
+        if (!sigilsExpanded) {
+            context.getMatrices().multiply(RotationAxis.POSITIVE_Z.rotationDegrees(180.0F));
+        }
+        drawTextureIcon(context, CHEVRON_TEXTURE, -GUI_ICON_SIZE / 2, -GUI_ICON_SIZE / 2);
+        context.getMatrices().pop();
     }
 
     private Text hoveredTooltip(PaperLayout layout, double mouseX, double mouseY) {
@@ -311,15 +385,6 @@ public final class PaperScreen extends Screen {
                 return Text.translatable("screen.witch-hat-atelier-mod.paper.action." + actionKeys[index]);
             }
         }
-        if (hardnessButton(actions).contains(mouseX, mouseY)) {
-            return Text.translatable("screen.witch-hat-atelier-mod.paper.brush.hardness",
-                    workspace.brush().hardnessPercent());
-        }
-        if (stabilizationButton(actions).contains(mouseX, mouseY)) {
-            return Text.translatable("screen.witch-hat-atelier-mod.paper.brush.smoothing",
-                    workspace.brush().stabilization());
-        }
-
         Bounds toolbar = layout.toolbar();
         if (primaryButton(toolbar, 0).contains(mouseX, mouseY)) {
             return PaperTool.PENCIL.label();
@@ -368,19 +433,6 @@ public final class PaperScreen extends Screen {
     private Bounds actionButton(Bounds actions, int index) {
         return new Bounds(actions.x() + 2 + index * (ACTION_BUTTON_WIDTH + ACTION_BUTTON_GAP),
                 actions.y() + 2, ACTION_BUTTON_WIDTH, ACTION_BUTTON_HEIGHT);
-    }
-
-    private Bounds hardnessButton(Bounds actions) {
-        int start = actions.x() + 2 + ACTION_BUTTON_COUNT * (ACTION_BUTTON_WIDTH + ACTION_BUTTON_GAP);
-        int available = Math.max(40, actions.right() - start - 4);
-        int width = Math.max(20, (available - ACTION_BUTTON_GAP) / 2);
-        return new Bounds(start, actions.y() + 2, width, ACTION_BUTTON_HEIGHT);
-    }
-
-    private Bounds stabilizationButton(Bounds actions) {
-        Bounds hardness = hardnessButton(actions);
-        return new Bounds(hardness.right() + ACTION_BUTTON_GAP, actions.y() + 2,
-                hardness.width(), ACTION_BUTTON_HEIGHT);
     }
 
     private Bounds primaryButton(Bounds toolbar, int index) {
@@ -509,24 +561,6 @@ public final class PaperScreen extends Screen {
                 pixel(context, x, y, 5, 18, 14, 2, color);
             }
         }
-    }
-
-    private static void drawChevron(DrawContext context, int x, int y, boolean expanded, int color) {
-        if (expanded) {
-            context.fill(x, y, x + 2, y + 2, color);
-            context.fill(x + 6, y, x + 8, y + 2, color);
-            context.fill(x + 2, y + 2, x + 6, y + 4, color);
-        } else {
-            context.fill(x + 2, y, x + 6, y + 2, color);
-            context.fill(x, y + 2, x + 2, y + 4, color);
-            context.fill(x + 6, y + 2, x + 8, y + 4, color);
-        }
-    }
-
-    private static void drawSigilsCategoryIcon(DrawContext context, int x, int y, int color) {
-        context.fill(x, y, x + 4, y + 4, color);
-        context.fill(x + 6, y, x + 10, y + 4, color);
-        context.fill(x + 3, y + 6, x + 7, y + 10, color);
     }
 
     private static void pixel(DrawContext context, int originX, int originY,
