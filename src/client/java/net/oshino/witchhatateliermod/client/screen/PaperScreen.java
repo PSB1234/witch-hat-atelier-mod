@@ -11,6 +11,7 @@ import net.oshino.witchhatateliermod.client.screen.paper.PaperCanvas;
 import net.oshino.witchhatateliermod.client.screen.paper.PaperCanvasRenderer;
 import net.oshino.witchhatateliermod.client.screen.paper.PaperTool;
 import net.oshino.witchhatateliermod.client.screen.paper.PaperWorkspace;
+import net.oshino.witchhatateliermod.client.drawing.stamp.DrawContextStampRenderer;
 import org.lwjgl.glfw.GLFW;
 
 public final class PaperScreen extends Screen {
@@ -20,6 +21,10 @@ public final class PaperScreen extends Screen {
     private static final int CONTENT_GAP = 12;
     private static final int ICON_BUTTON_SIZE = 26;
     private static final int ICON_BUTTON_GAP = 3;
+    private static final int TOOL_VIEWPORT_TOP = 64;
+    private static final int TOOL_SCROLL_STEP = 24;
+    private static final int TOOL_SCROLLBAR_WIDTH = 4;
+    private static final int MIN_TOOL_SCROLLBAR_THUMB_HEIGHT = 18;
     private static final int ACTION_BAR_HEIGHT = 22;
     private static final int ACTION_BAR_GAP = 6;
     private static final int ACTION_BUTTON_WIDTH = 31;
@@ -40,7 +45,6 @@ public final class PaperScreen extends Screen {
     private static final Identifier SAVE_TEXTURE = guiTexture("software_save_button_floppy_disk");
     private static final Identifier LOAD_TEXTURE = guiTexture("software_file_document_page_plus_add_new");
     private static final Identifier EXPORT_TEXTURE = guiTexture("software_file_document_page_arrow_send_export");
-    private static final Identifier SIGILS_TEXTURE = guiTexture("rpg_spell_magic_circle_ritual_pentagram");
     private static final Identifier CHEVRON_TEXTURE = guiTexture("arrows_pointer_down_south");
 
     private static final int PANEL = 0xF21B171C;
@@ -53,15 +57,15 @@ public final class PaperScreen extends Screen {
     private static final int PAPER_SHADOW = 0x88000000;
     private static final int TEXT = 0xFFF0E5D0;
 
-    private static final PaperTool[] SIGILS = {
-            PaperTool.WIND_SIGN, PaperTool.LIGHT_SIGIL, PaperTool.WATER_SIGN
-    };
-    private static final PaperTool[] SHAPES = {
-            PaperTool.LINE, PaperTool.CIRCLE, PaperTool.RECTANGLE, PaperTool.TRIANGLE
-    };
+    private static final java.util.List<PaperTool> SIGILS = PaperTool.sigils();
+    private static final java.util.List<PaperTool> SYMBOLS = PaperTool.symbols();
+    private static final java.util.List<PaperTool> SHAPES = PaperTool.shapes();
 
     private PaperTool selectedTool = PaperTool.PENCIL;
     private boolean sigilsExpanded = true;
+    private boolean symbolsExpanded = true;
+    private int toolScrollOffset;
+    private boolean draggingToolScrollbar;
     private final PaperWorkspace workspace;
     private final PaperCanvas canvas;
     private final PaperCanvasRenderer canvasRenderer;
@@ -132,6 +136,11 @@ public final class PaperScreen extends Screen {
             }
         }
         Bounds toolbar = layout.toolbar();
+        if (toolScrollbarTrack(toolbar).contains(mouseX, mouseY)) {
+            draggingToolScrollbar = true;
+            scrollToolsToPointer(toolbar, mouseY);
+            return true;
+        }
         if (primaryButton(toolbar, 0).contains(mouseX, mouseY)) {
             selectedTool = PaperTool.PENCIL;
             return true;
@@ -147,21 +156,36 @@ public final class PaperScreen extends Screen {
 
         if (sigilsHeader(toolbar).contains(mouseX, mouseY)) {
             sigilsExpanded = !sigilsExpanded;
+            clampToolScroll(toolbar);
+            return true;
+        }
+        if (symbolsHeader(toolbar).contains(mouseX, mouseY)) {
+            symbolsExpanded = !symbolsExpanded;
+            clampToolScroll(toolbar);
             return true;
         }
 
         if (sigilsExpanded) {
-            for (int index = 0; index < SIGILS.length; index++) {
+            for (int index = 0; index < SIGILS.size(); index++) {
                 if (sigilButton(toolbar, index).contains(mouseX, mouseY)) {
-                    selectedTool = SIGILS[index];
+                    selectedTool = SIGILS.get(index);
                     return true;
                 }
             }
         }
 
-        for (int index = 0; index < SHAPES.length; index++) {
+        if (symbolsExpanded) {
+            for (int index = 0; index < SYMBOLS.size(); index++) {
+                if (symbolButton(toolbar, index).contains(mouseX, mouseY)) {
+                    selectedTool = SYMBOLS.get(index);
+                    return true;
+                }
+            }
+        }
+
+        for (int index = 0; index < SHAPES.size(); index++) {
             if (shapeButton(toolbar, index).contains(mouseX, mouseY)) {
-                selectedTool = SHAPES[index];
+                selectedTool = SHAPES.get(index);
                 return true;
             }
         }
@@ -177,6 +201,10 @@ public final class PaperScreen extends Screen {
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+        if (button == 0 && draggingToolScrollbar) {
+            scrollToolsToPointer(layout().toolbar(), mouseY);
+            return true;
+        }
         if (button == 0 && canvas.isDrawing()) {
             Bounds paper = layout().paper();
             canvas.continueStroke(localX(paper, mouseX), localY(paper, mouseY));
@@ -187,12 +215,27 @@ public final class PaperScreen extends Screen {
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (button == 0 && draggingToolScrollbar) {
+            draggingToolScrollbar = false;
+            return true;
+        }
         if (button == 0 && canvas.isDrawing()) {
             Bounds paper = layout().paper();
             canvas.endStroke(localX(paper, mouseX), localY(paper, mouseY));
             return true;
         }
         return super.mouseReleased(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        Bounds toolbar = layout().toolbar();
+        if (toolViewport(toolbar).contains(mouseX, mouseY) && maxToolScroll(toolbar) > 0) {
+            toolScrollOffset = Math.clamp(toolScrollOffset - (int) Math.round(verticalAmount * TOOL_SCROLL_STEP),
+                    0, maxToolScroll(toolbar));
+            return true;
+        }
+        return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
     }
 
     @Override
@@ -247,6 +290,7 @@ public final class PaperScreen extends Screen {
     }
 
     private void drawToolbar(DrawContext context, Bounds toolbar, int mouseX, int mouseY) {
+        clampToolScroll(toolbar);
         context.fill(toolbar.x(), toolbar.y(), toolbar.right(), toolbar.bottom(), PANEL_BORDER);
         context.fill(toolbar.x() + 1, toolbar.y() + 1, toolbar.right() - 1, toolbar.bottom() - 1, PANEL);
 
@@ -257,22 +301,39 @@ public final class PaperScreen extends Screen {
         drawIconButton(context, primaryButton(toolbar, 2), null,
                 false, true, mouseX, mouseY);
 
-        Bounds header = sigilsHeader(toolbar);
-        drawSigilsHeader(context, header, mouseX, mouseY);
+        Bounds viewport = toolViewport(toolbar);
+        if (viewport.height() > 0) {
+            context.enableScissor(viewport.x(), viewport.y(), viewport.right(), viewport.bottom());
+            Bounds header = sigilsHeader(toolbar);
+            drawCategoryHeader(context, header, Text.translatable("screen.witch-hat-atelier-mod.paper.sigils"),
+                    sigilsExpanded, mouseX, mouseY);
 
-        if (sigilsExpanded) {
-            for (int index = 0; index < SIGILS.length; index++) {
-                PaperTool sigil = SIGILS[index];
-                drawIconButton(context, sigilButton(toolbar, index), sigil,
-                        selectedTool == sigil, false, mouseX, mouseY);
+            if (sigilsExpanded) {
+                for (int index = 0; index < SIGILS.size(); index++) {
+                    PaperTool sigil = SIGILS.get(index);
+                    drawIconButton(context, sigilButton(toolbar, index), sigil,
+                            selectedTool == sigil, false, mouseX, mouseY);
+                }
             }
-        }
 
-        for (int index = 0; index < SHAPES.length; index++) {
-            PaperTool shape = SHAPES[index];
-            drawIconButton(context, shapeButton(toolbar, index), shape,
-                    selectedTool == shape, false, mouseX, mouseY);
+            drawCategoryHeader(context, symbolsHeader(toolbar), Text.translatable("screen.witch-hat-atelier-mod.paper.symbols"),
+                    symbolsExpanded, mouseX, mouseY);
+            if (symbolsExpanded) {
+                for (int index = 0; index < SYMBOLS.size(); index++) {
+                    PaperTool symbol = SYMBOLS.get(index);
+                    drawIconButton(context, symbolButton(toolbar, index), symbol,
+                            selectedTool == symbol, false, mouseX, mouseY);
+                }
+            }
+
+            for (int index = 0; index < SHAPES.size(); index++) {
+                PaperTool shape = SHAPES.get(index);
+                drawIconButton(context, shapeButton(toolbar, index), shape,
+                        selectedTool == shape, false, mouseX, mouseY);
+            }
+            context.disableScissor();
         }
+        drawToolScrollbar(context, toolbar, mouseX, mouseY);
     }
 
     private void drawActionBar(DrawContext context, Bounds actions, int mouseX, int mouseY) {
@@ -341,7 +402,10 @@ public final class PaperScreen extends Screen {
         context.drawVerticalLine(bounds.x(), bounds.y(), bounds.bottom() - 1, PANEL_BORDER);
 
         Identifier texture = toolTexture(tool);
-        if (texture != null) {
+        if (tool != null && tool.stamp().isPresent()) {
+            DrawContextStampRenderer.render(context, tool.stamp().get(), bounds.x() + 3, bounds.y() + 3,
+                    GUI_ICON_SIZE + 2, GUI_ICON_SIZE + 2, TEXT, 1, 1.0F);
+        } else if (texture != null) {
             int iconX = bounds.x() + (bounds.width() - GUI_ICON_SIZE) / 2;
             int iconY = bounds.y() + (bounds.height() - GUI_ICON_SIZE) / 2;
             drawTextureIcon(context, texture, iconX, iconY);
@@ -367,18 +431,18 @@ public final class PaperScreen extends Screen {
             case CIRCLE -> CIRCLE_TEXTURE;
             case RECTANGLE -> RECTANGLE_TEXTURE;
             case TRIANGLE -> TRIANGLE_TEXTURE;
-            case WIND_SIGN, LIGHT_SIGIL, WATER_SIGN -> null;
+            default -> null;
         };
     }
 
-    private void drawSigilsHeader(DrawContext context, Bounds bounds, int mouseX, int mouseY) {
+    private void drawCategoryHeader(DrawContext context, Bounds bounds, Text label, boolean expanded, int mouseX, int mouseY) {
         int color = bounds.contains(mouseX, mouseY) ? BUTTON_HOVER : BUTTON;
         context.fill(bounds.x(), bounds.y(), bounds.right(), bounds.bottom(), color);
         context.drawHorizontalLine(bounds.x(), bounds.right() - 1, bounds.y(), PANEL_BORDER);
         context.drawVerticalLine(bounds.x(), bounds.y(), bounds.bottom() - 1, PANEL_BORDER);
 
-        drawTextureIcon(context, SIGILS_TEXTURE, bounds.x() + 5, bounds.y() + 2);
-        drawRotatedChevron(context, bounds.right() - 19, bounds.y() + 2);
+        context.drawTextWithShadow(textRenderer, label, bounds.x() + 4, bounds.y() + 6, TEXT);
+        drawRotatedChevron(context, bounds.right() - 19, bounds.y() + 2, expanded);
     }
 
     private static void drawTextureIcon(DrawContext context, Identifier texture, int x, int y) {
@@ -386,10 +450,10 @@ public final class PaperScreen extends Screen {
                 GUI_ICON_SIZE, GUI_ICON_SIZE, GUI_ICON_SIZE, GUI_ICON_SIZE);
     }
 
-    private void drawRotatedChevron(DrawContext context, int x, int y) {
+    private void drawRotatedChevron(DrawContext context, int x, int y, boolean expanded) {
         context.getMatrices().push();
         context.getMatrices().translate(x + GUI_ICON_SIZE / 2.0F, y + GUI_ICON_SIZE / 2.0F, 0.0F);
-        if (!sigilsExpanded) {
+        if (!expanded) {
             context.getMatrices().multiply(RotationAxis.POSITIVE_Z.rotationDegrees(180.0F));
         }
         drawTextureIcon(context, CHEVRON_TEXTURE, -GUI_ICON_SIZE / 2, -GUI_ICON_SIZE / 2);
@@ -417,16 +481,26 @@ public final class PaperScreen extends Screen {
         if (sigilsHeader(toolbar).contains(mouseX, mouseY)) {
             return Text.translatable("screen.witch-hat-atelier-mod.paper.sigils");
         }
+        if (symbolsHeader(toolbar).contains(mouseX, mouseY)) {
+            return Text.translatable("screen.witch-hat-atelier-mod.paper.symbols");
+        }
         if (sigilsExpanded) {
-            for (int index = 0; index < SIGILS.length; index++) {
+            for (int index = 0; index < SIGILS.size(); index++) {
                 if (sigilButton(toolbar, index).contains(mouseX, mouseY)) {
-                    return SIGILS[index].label();
+                    return SIGILS.get(index).label();
                 }
             }
         }
-        for (int index = 0; index < SHAPES.length; index++) {
+        if (symbolsExpanded) {
+            for (int index = 0; index < SYMBOLS.size(); index++) {
+                if (symbolButton(toolbar, index).contains(mouseX, mouseY)) {
+                    return SYMBOLS.get(index).label();
+                }
+            }
+        }
+        for (int index = 0; index < SHAPES.size(); index++) {
             if (shapeButton(toolbar, index).contains(mouseX, mouseY)) {
-                return SHAPES[index].label();
+                return SHAPES.get(index).label();
             }
         }
         return null;
@@ -473,27 +547,104 @@ public final class PaperScreen extends Screen {
     }
 
     private Bounds sigilsHeader(Bounds toolbar) {
-        return new Bounds(toolbar.x() + 6, toolbar.y() + 64, toolbar.width() - 12, 20);
+        return new Bounds(toolbar.x() + 6, toolbar.y() + TOOL_VIEWPORT_TOP - toolScrollOffset,
+                toolbar.width() - 12, 20);
     }
 
     private Bounds sigilButton(Bounds toolbar, int index) {
-        Bounds header = sigilsHeader(toolbar);
+        return categoryButton(sigilsHeader(toolbar), index);
+    }
+
+    private Bounds symbolsHeader(Bounds toolbar) {
+        int top = sigilsExpanded && !SIGILS.isEmpty()
+                ? sigilButton(toolbar, SIGILS.size() - 1).bottom() + 5
+                : sigilsHeader(toolbar).bottom() + 5;
+        return new Bounds(toolbar.x() + 6, top, toolbar.width() - 12, 20);
+    }
+
+    private Bounds symbolButton(Bounds toolbar, int index) {
+        return categoryButton(symbolsHeader(toolbar), index);
+    }
+
+    private Bounds categoryButton(Bounds header, int index) {
         int column = index % 2;
         int row = index / 2;
-        return new Bounds(toolbar.x() + 8 + column * (ICON_BUTTON_SIZE + ICON_BUTTON_GAP),
+        return new Bounds(header.x() + 2 + column * (ICON_BUTTON_SIZE + ICON_BUTTON_GAP),
                 header.bottom() + 5 + row * (ICON_BUTTON_SIZE + ICON_BUTTON_GAP),
                 ICON_BUTTON_SIZE, ICON_BUTTON_SIZE);
     }
 
     private Bounds shapeButton(Bounds toolbar, int index) {
-        Bounds header = sigilsHeader(toolbar);
-        int shapeTop = sigilsExpanded ? sigilButton(toolbar, SIGILS.length - 1).bottom() + 5 : header.bottom() + 5;
+        Bounds header = symbolsHeader(toolbar);
+        int shapeTop = symbolsExpanded && !SYMBOLS.isEmpty()
+                ? symbolButton(toolbar, SYMBOLS.size() - 1).bottom() + 5
+                : header.bottom() + 5;
         int gap = 3;
         int width = (header.width() - gap) / 2;
         int column = index % 2;
         int row = index / 2;
         return new Bounds(header.x() + column * (width + gap),
                 shapeTop + row * (ICON_BUTTON_SIZE + ICON_BUTTON_GAP), width, ICON_BUTTON_SIZE);
+    }
+
+    private Bounds toolViewport(Bounds toolbar) {
+        int top = Math.min(toolbar.bottom() - 2, toolbar.y() + TOOL_VIEWPORT_TOP);
+        return new Bounds(toolbar.x() + 1, top, toolbar.width() - 2, Math.max(0, toolbar.bottom() - 4 - top));
+    }
+
+    private int maxToolScroll(Bounds toolbar) {
+        Bounds viewport = toolViewport(toolbar);
+        if (viewport.height() == 0) {
+            return 0;
+        }
+        int contentBottom = !SHAPES.isEmpty() ? shapeButton(toolbar, SHAPES.size() - 1).bottom()
+                : symbolsHeader(toolbar).bottom();
+        return Math.max(0, contentBottom + toolScrollOffset + 5 - viewport.bottom());
+    }
+
+    private Bounds toolScrollbarTrack(Bounds toolbar) {
+        Bounds viewport = toolViewport(toolbar);
+        return new Bounds(toolbar.right() - TOOL_SCROLLBAR_WIDTH - 2, viewport.y(), TOOL_SCROLLBAR_WIDTH, viewport.height());
+    }
+
+    private Bounds toolScrollbarThumb(Bounds toolbar) {
+        Bounds track = toolScrollbarTrack(toolbar);
+        int maxScroll = maxToolScroll(toolbar);
+        if (maxScroll == 0) {
+            return new Bounds(track.x(), track.y(), track.width(), 0);
+        }
+        int contentHeight = track.height() + maxScroll;
+        int thumbHeight = Math.clamp((long) track.height() * track.height() / contentHeight,
+                MIN_TOOL_SCROLLBAR_THUMB_HEIGHT, track.height());
+        int travel = track.height() - thumbHeight;
+        int top = track.y() + Math.round((float) toolScrollOffset * travel / maxScroll);
+        return new Bounds(track.x(), top, track.width(), thumbHeight);
+    }
+
+    private void drawToolScrollbar(DrawContext context, Bounds toolbar, int mouseX, int mouseY) {
+        if (maxToolScroll(toolbar) == 0) {
+            return;
+        }
+        Bounds track = toolScrollbarTrack(toolbar);
+        Bounds thumb = toolScrollbarThumb(toolbar);
+        context.fill(track.x(), track.y(), track.right(), track.bottom(), 0xFF211C22);
+        int color = draggingToolScrollbar || thumb.contains(mouseX, mouseY) ? BUTTON_HOVER : PANEL_BORDER;
+        context.fill(thumb.x(), thumb.y(), thumb.right(), thumb.bottom(), color);
+    }
+
+    private void scrollToolsToPointer(Bounds toolbar, double mouseY) {
+        Bounds track = toolScrollbarTrack(toolbar);
+        Bounds thumb = toolScrollbarThumb(toolbar);
+        int travel = track.height() - thumb.height();
+        if (travel <= 0) {
+            return;
+        }
+        float progress = Math.clamp((float) (mouseY - track.y() - thumb.height() / 2.0) / travel, 0.0F, 1.0F);
+        toolScrollOffset = Math.round(progress * maxToolScroll(toolbar));
+    }
+
+    private void clampToolScroll(Bounds toolbar) {
+        toolScrollOffset = Math.clamp(toolScrollOffset, 0, maxToolScroll(toolbar));
     }
 
     private int localX(Bounds paper, double mouseX) {
@@ -531,7 +682,7 @@ public final class PaperScreen extends Screen {
                 pixel(context, x, y, 17, 9, 2, 8, color);
                 pixel(context, x, y, 12, 9, 2, 8, color);
             }
-            case WIND_SIGN -> {
+            case WIND_SIGIL -> {
                 pixel(context, x, y, 4, 6, 13, 2, color);
                 pixel(context, x, y, 17, 8, 3, 2, color);
                 pixel(context, x, y, 7, 11, 12, 2, color);
@@ -546,7 +697,7 @@ public final class PaperScreen extends Screen {
                 pixel(context, x, y, 7, 14, 3, 3, color);
                 pixel(context, x, y, 14, 14, 3, 3, color);
             }
-            case WATER_SIGN -> {
+            case WATER_SIGIL -> {
                 pixel(context, x, y, 3, 7, 4, 2, color);
                 pixel(context, x, y, 7, 9, 4, 2, color);
                 pixel(context, x, y, 11, 7, 4, 2, color);
