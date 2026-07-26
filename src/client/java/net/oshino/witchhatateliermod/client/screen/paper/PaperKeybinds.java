@@ -4,13 +4,17 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.item.Items;
+import net.minecraft.util.Hand;
 import net.minecraft.util.ActionResult;
 import net.oshino.witchhatateliermod.client.screen.PaperScreen;
+import net.oshino.witchhatateliermod.network.PaperSavePayload;
+import net.oshino.witchhatateliermod.paper.PaperDocumentItemData;
 import org.lwjgl.glfw.GLFW;
 
 public class PaperKeybinds {
@@ -22,13 +26,15 @@ public class PaperKeybinds {
       "key.witch-hat-atelier-mod.paper.smoothing", InputUtil.Type.KEYSYM,
       GLFW.GLFW_KEY_M, "key.category.witch-hat-atelier-mod"));
   private static final MinecraftClient  client = MinecraftClient.getInstance();
-  private static final PaperWorkspace paperWorkspace = new PaperWorkspace(client.runDirectory.toPath());
+  private static PaperWorkspace paperWorkspace;
 
 
 
   public static void register() {
     ClientTickEvents.END_CLIENT_TICK.register(tickingClient -> {
-      paperWorkspace.tick();
+      if (paperWorkspace != null) {
+        paperWorkspace.tick();
+      }
       while (cycleHardnessKey.wasPressed()) {
         if (tickingClient.currentScreen instanceof PaperScreen paperScreen) {
           paperScreen.cycleBrushHardness();
@@ -40,12 +46,21 @@ public class PaperKeybinds {
         }
       }
     });
-    ClientLifecycleEvents.CLIENT_STOPPING.register(ignored -> paperWorkspace.saveOnShutdown());
+    ClientLifecycleEvents.CLIENT_STOPPING.register(ignored -> {
+      if (paperWorkspace != null) {
+        paperWorkspace.saveOnClose();
+      }
+    });
     UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
       if (world.isClient
         && !player.isSpectator()
         && player.getStackInHand(hand).isOf(Items.PAPER)
         && world.getBlockState(hitResult.getBlockPos()).isOf(Blocks.LECTERN)) {
+        var document = PaperDocumentItemData.read(player.getStackInHand(hand)).orElse(
+            new PaperDocumentItemData.Document("", "", ""));
+        boolean mainHand = hand == Hand.MAIN_HAND;
+        paperWorkspace = new PaperWorkspace(client.runDirectory.toPath(), document.title(), document.drawing(),
+            saved -> ClientPlayNetworking.send(new PaperSavePayload(mainHand, saved.title(), saved.drawing())));
         MinecraftClient.getInstance().setScreen(new PaperScreen(paperWorkspace));
         return ActionResult.SUCCESS;
       }

@@ -2,6 +2,8 @@
   "item.witch-hat-atelier-mod.spellbook": "Witch's Spellbook",
   "screen.witch-hat-atelier-mod.spellbook": "The Witch's Field Notes",
   "screen.witch-hat-atelier-mod.paper": "Paper",
+  "screen.witch-hat-atelier-mod.paper.title": "Paper title",
+  "screen.witch-hat-atelier-mod.paper.title.placeholder": "Untitled drawing",
   "screen.witch-hat-atelier-mod.paper.placeholder": "The paper workspace is coming soon.",
   "screen.witch-hat-atelier-mod.paper.clear": "Clear",
   "screen.witch-hat-atelier-mod.paper.sigils": "Signs & Sigils",

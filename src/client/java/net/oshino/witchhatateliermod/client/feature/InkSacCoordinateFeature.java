@@ -6,8 +6,6 @@ import net.minecraft.item.Items;
 import net.minecraft.util.ActionResult;
 
 public final class InkSacCoordinateFeature {
-	private InkSacCoordinateFeature() {
-	}
   /*
   Used to register event which activates when player holding ink-sack and world interacts
   * */

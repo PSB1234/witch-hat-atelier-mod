@@ -2,6 +2,7 @@ package net.oshino.witchhatateliermod.client.screen;
 
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.RotationAxis;
@@ -64,6 +65,7 @@ public final class PaperScreen extends Screen {
     private final PaperWorkspace workspace;
     private final PaperCanvas canvas;
     private final PaperCanvasRenderer canvasRenderer;
+    private TextFieldWidget titleField;
     private Text statusMessage;
     private long statusMessageUntil;
 
@@ -75,12 +77,25 @@ public final class PaperScreen extends Screen {
     }
 
     @Override
+    protected void init() {
+        PaperLayout layout = layout();
+        titleField = addDrawableChild(new TextFieldWidget(textRenderer, layout.actions().x() + 3,
+                layout.actions().y() + 3, titleFieldWidth(layout.actions()), 16,
+                Text.translatable("screen.witch-hat-atelier-mod.paper.title")));
+        titleField.setMaxLength(64);
+        titleField.setPlaceholder(Text.translatable("screen.witch-hat-atelier-mod.paper.title.placeholder"));
+        titleField.setText(workspace.title());
+        titleField.setChangedListener(workspace::rename);
+    }
+
+    @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         super.render(context, mouseX, mouseY, delta);
 
         renderBackground(context, mouseX, mouseY, delta);
 
         PaperLayout layout = layout();
+        positionTitleField(layout.actions());
         workspace.updateCanvasSize(layout.paper().width(), layout.paper().height());
         drawPaper(context, layout.paper());
         canvasRenderer.render(context, canvas, layout.paper().x(), layout.paper().y(),
@@ -106,6 +121,10 @@ public final class PaperScreen extends Screen {
         }
 
         PaperLayout layout = layout();
+        if (titleField.mouseClicked(mouseX, mouseY, button)) {
+            setFocused(titleField);
+            return true;
+        }
         for (int index = 0; index < ACTION_BUTTON_COUNT; index++) {
             if (actionButton(layout.actions(), index).contains(mouseX, mouseY)) {
                 runAction(index);
@@ -431,8 +450,18 @@ public final class PaperScreen extends Screen {
     }
 
     private Bounds actionButton(Bounds actions, int index) {
-        return new Bounds(actions.x() + 2 + index * (ACTION_BUTTON_WIDTH + ACTION_BUTTON_GAP),
+        int totalWidth = ACTION_BUTTON_COUNT * ACTION_BUTTON_WIDTH + (ACTION_BUTTON_COUNT - 1) * ACTION_BUTTON_GAP;
+        return new Bounds(actions.right() - totalWidth - 2 + index * (ACTION_BUTTON_WIDTH + ACTION_BUTTON_GAP),
                 actions.y() + 2, ACTION_BUTTON_WIDTH, ACTION_BUTTON_HEIGHT);
+    }
+
+    private int titleFieldWidth(Bounds actions) {
+        return Math.max(32, actionButton(actions, 0).x() - actions.x() - 6);
+    }
+
+    private void positionTitleField(Bounds actions) {
+        titleField.setPosition(actions.x() + 3, actions.y() + 3);
+        titleField.setWidth(titleFieldWidth(actions));
     }
 
     private Bounds primaryButton(Bounds toolbar, int index) {
@@ -577,6 +606,7 @@ public final class PaperScreen extends Screen {
     @Override
     public void removed() {
         canvas.finishActiveStroke();
+        workspace.saveOnClose();
         super.removed();
     }
 

@@ -1,5 +1,6 @@
 package net.oshino.witchhatateliermod.client.feature;
 
+import net.oshino.witchhatateliermod.client.feature.BakedModelPixelFeature.ModelPixelHit;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumer;
@@ -9,7 +10,6 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import org.joml.Matrix4f;
-
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,12 +17,9 @@ import java.util.Map;
 public final class BlackPixelRenderer {
   //Need it for preventing Z-fighting
 	private static final double SURFACE_OFFSET = 0.001;
-  //
-	private static final Map<PixelKey, BakedModelPixelFeature.ModelPixelHit> PIXELS = new LinkedHashMap<>();
-
-	private BlackPixelRenderer() {
-	}
-
+  //Used to store Pixel to Block
+	private static final Map<PixelKey, ModelPixelHit> PIXELS = new LinkedHashMap<>();
+  //Register BlackPixel
 	public static void register() {
 		WorldRenderEvents.AFTER_ENTITIES.register(context -> {
 			MatrixStack matrices = context.matrixStack();
@@ -30,17 +27,16 @@ public final class BlackPixelRenderer {
 			if (matrices == null || consumers == null || PIXELS.isEmpty()) {
 				return;
 			}
-
 			Vec3d camera = context.camera().getPos();
 			Matrix4f matrix = matrices.peek().getPositionMatrix();
 			VertexConsumer vertices = consumers.getBuffer(RenderLayer.getDebugQuads());
-			for (BakedModelPixelFeature.ModelPixelHit pixel : PIXELS.values()) {
+			for (ModelPixelHit pixel : PIXELS.values()) {
 				renderPixel(vertices, matrix, camera, pixel);
 			}
 		});
 	}
 
-	public static void addPixel(BakedModelPixelFeature.ModelPixelHit pixel) {
+	public static void addPixel(ModelPixelHit pixel) {
 		PixelKey key = new PixelKey(
 				pixel.blockPos(), pixel.quadIndex(), pixel.textureId(), pixel.pixelX(), pixel.pixelY()
 		);

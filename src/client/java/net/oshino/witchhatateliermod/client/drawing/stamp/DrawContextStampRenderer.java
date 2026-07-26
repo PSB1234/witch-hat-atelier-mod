@@ -7,9 +7,6 @@ import net.oshino.witchhatateliermod.drawing.stamp.DrawingStamp.StampPoint;
 
 /** Renders normalized drawing stamps into Minecraft GUI coordinates. */
 public final class DrawContextStampRenderer {
-    private DrawContextStampRenderer() {
-    }
-
     public static void render(DrawContext context, DrawingStamp stamp,
                               int x, int y, int width, int height,
                               int color, int brushSize, float hardness) {

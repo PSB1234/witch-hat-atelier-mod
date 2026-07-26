@@ -37,10 +37,7 @@ public final class DrawingStamps {
     );
 
     private static final List<DrawingStamp> VALUES = List.of(WIND_SIGN, LIGHT_SIGIL, WATER_SIGN);
-    private static final Map<Identifier, DrawingStamp> BY_ID = indexById(VALUES);
-
-    private DrawingStamps() {
-    }
+    private static final Map<Identifier, DrawingStamp> BY_ID = indexById();
 
     public static List<DrawingStamp> values() {
         return VALUES;
@@ -61,9 +58,9 @@ public final class DrawingStamps {
         return new DrawingStamp.StampPath(points);
     }
 
-    private static Map<Identifier, DrawingStamp> indexById(List<DrawingStamp> stamps) {
+    private static Map<Identifier, DrawingStamp> indexById() {
         Map<Identifier, DrawingStamp> indexed = new LinkedHashMap<>();
-        for (DrawingStamp stamp : stamps) {
+        for (DrawingStamp stamp : DrawingStamps.VALUES) {
             if (indexed.put(stamp.id(), stamp) != null) {
                 throw new IllegalStateException("Duplicate drawing stamp id " + stamp.id());
             }

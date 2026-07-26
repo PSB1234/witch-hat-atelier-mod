@@ -9,9 +9,6 @@ import java.awt.geom.Path2D;
 
 /** Creates Java2D shapes from the same normalized geometry used by GUI stamps. */
 public final class AwtStampShapeFactory {
-    private AwtStampShapeFactory() {
-    }
-
     public static Shape create(DrawingStamp stamp, int x, int y, int width, int height) {
         if (width <= 0 || height <= 0) {
             throw new IllegalArgumentException("Stamp dimensions must be positive");
