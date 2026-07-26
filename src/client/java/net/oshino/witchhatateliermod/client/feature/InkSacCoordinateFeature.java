@@ -8,7 +8,9 @@ import net.minecraft.util.ActionResult;
 public final class InkSacCoordinateFeature {
 	private InkSacCoordinateFeature() {
 	}
-
+  /*
+  Used to register event which activates when player holding ink-sack and world interacts
+  * */
 	public static void register() {
 		UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
 			if (!world.isClient || !player.getStackInHand(hand).isOf(Items.INK_SAC)) {

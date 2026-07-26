@@ -15,7 +15,9 @@ import java.util.List;
 import java.util.Map;
 
 public final class BlackPixelRenderer {
+  //Need it for preventing Z-fighting
 	private static final double SURFACE_OFFSET = 0.001;
+  //
 	private static final Map<PixelKey, BakedModelPixelFeature.ModelPixelHit> PIXELS = new LinkedHashMap<>();
 
 	private BlackPixelRenderer() {
